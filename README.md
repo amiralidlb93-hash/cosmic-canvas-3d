@@ -10,7 +10,7 @@ An interactive, web-based 3D Solar System Sandbox built with **Three.js**, **Tai
 
 ## 🔗 Live Demo | دمو آنلاین
 
-👉 **[Click Here to Launch Live Application](https://YOUR_USERNAME.github.io/YOUR_REPO_NAME/)**
+👉 **[Click Here to Launch Live Application](https://amiralidlb93-hash.github.io/cosmic-canvas-3d/)**
 
 ---
 
