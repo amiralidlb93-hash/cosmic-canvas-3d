@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" class="h-full bg-black text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>منظومه شمسی شخصی ۳ بعدی | Personal 3D Solar System</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Three.js, OrbitControls & TWEEN.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=Vazirmatn:wght@300;400;500;700;900&display=swap');
+
+        [dir="rtl"] * {
+            font-family: 'Vazirmatn', sans-serif;
+        }
+        [dir="ltr"] * {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Glassmorphism effects */
+        .glass-panel {
+            background: rgba(10, 15, 30, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.65);
+        }
+
+        .glass-card {
+            background: rgba(20, 30, 50, 0.55);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .glass-card:hover {
+            border-color: rgba(56, 189, 248, 0.4);
+            background: rgba(30, 45, 75, 0.7);
+        }
+
+        /* Glowing texts */
+        .glow-text-cyan {
+            text-shadow: 0 0 15px rgba(56, 189, 248, 0.7);
+        }
+        .glow-text-amber {
+            text-shadow: 0 0 18px rgba(251, 191, 36, 0.8);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(10, 15, 30, 0.5);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(56, 189, 248, 0.3);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(56, 189, 248, 0.7);
+        }
+
+        /* Canvas viewport */
+        #webgl-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* UI Layer */
+        #ui-layer {
+            position: relative;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .interactive {
+            pointer-events: auto;
+        }
+
+        /* Slide & Fade helper classes for smooth UI panel toggle */
+        [dir="rtl"] .panel-hidden {
+            transform: translateX(120%);
+            opacity: 0;
+            pointer-events: none !important;
+        }
+        [dir="ltr"] .panel-hidden {
+            transform: translateX(-120%);
+            opacity: 0;
+            pointer-events: none !important;
+        }
+
+        .panel-visible {
+            transform: translateX(0) !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+        }
+
+        /* Pulse Animations */
+        @keyframes sunPulse {
+            0%, 100% { transform: scale(1); opacity: 0.85; }
+            50% { transform: scale(1.08); opacity: 1; }
+        }
+        .sun-pulse {
+            animation: sunPulse 4s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="h-full w-full bg-black text-slate-100 overflow-hidden relative">
+
+    <!-- 3D Canvas -->
+    <div id="webgl-container"></div>
+
+    <!-- Interface Layer -->
+    <div id="ui-layer" class="h-full w-full flex flex-col justify-between p-3 md:p-6">
+
+        <!-- HEADER / NAVIGATION -->
+        <header class="flex flex-wrap justify-between items-center w-full gap-3">
+            <!-- Title Card -->
+            <div class="interactive glass-panel rounded-2xl px-5 py-3 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-500 to-orange-400 border border-amber-300 flex items-center justify-center sun-pulse shadow-lg shadow-amber-500/40">
+                    <i data-lucide="sun" class="w-6 h-6 text-slate-950"></i>
+                </div>
+                <div>
+                    <h1 id="i18n-app-title" class="text-xl font-black bg-gradient-to-r from-amber-200 via-sky-200 to-indigo-300 bg-clip-text text-transparent glow-text-amber">
+                        منظومه شمسی شخصی ۳ بعدی
+                    </h1>
+                    <p id="i18n-app-subtitle" class="text-[11px] text-sky-400/80 font-medium">Visualizer & Customizable Cosmic Sandbox</p>
+                </div>
+            </div>
+
+            <!-- Global Action Controls -->
+            <div class="interactive flex items-center gap-2 glass-panel p-2 rounded-2xl">
+                <!-- Language Toggle Button -->
+                <button id="btn-lang-toggle" title="Switch Language / تغییر زبان" class="px-3 py-2 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 hover:bg-indigo-500/30 transition-all font-bold text-xs flex items-center gap-1.5">
+                    <i data-lucide="languages" class="w-4 h-4"></i>
+                    <span id="lang-indicator">English (EN)</span>
+                </button>
+
+                <button id="btn-sound" title="Audio / صدای کیهانی" class="p-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 hover:text-sky-400 transition-all">
+                    <i data-lucide="volume-x" id="icon-sound" class="w-5 h-5"></i>
+                </button>
+                <button id="btn-reset-cam" title="Reset View / زاویه دید کلی" class="p-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 hover:text-sky-400 transition-all">
+                    <i data-lucide="compass" class="w-5 h-5"></i>
+                </button>
+                <button id="btn-toggle-orbits" title="Orbits / مدارها" class="p-2.5 rounded-xl bg-sky-500/20 text-sky-300 border border-sky-500/30 hover:bg-sky-500/30 transition-all">
+                    <i data-lucide="orbit" class="w-5 h-5"></i>
+                </button>
+                <button id="btn-tour-mode" title="Tour / تور سینمایی" class="px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-xs text-slate-300 flex items-center gap-1.5 transition-all border border-slate-700">
+                    <i data-lucide="video" class="w-4 h-4 text-amber-400"></i>
+                    <span id="i18n-tour-btn" class="hidden sm:inline font-bold">تور سینمایی</span>
+                </button>
+                <button id="btn-add-planet" title="Add Planet / افزودن سیاره" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-lg shadow-indigo-600/40">
+                    <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                    <span id="i18n-add-planet-btn">سیاره جدید</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- MIDDLE CONTENT AREA -->
+        <div class="flex-1 my-3 flex justify-between items-center pointer-events-none relative overflow-hidden">
+
+            <!-- LEFT/RIGHT QUICK NAV BAR (Planet Pills) -->
+            <div class="interactive glass-panel p-2 rounded-2xl flex flex-col gap-1.5 max-h-[70vh] overflow-y-auto z-20">
+                <div id="i18n-bodies-label" class="text-[10px] font-black text-slate-400 uppercase tracking-wider text-center py-1 border-b border-slate-800">اجرام</div>
+                <button data-id="sun" id="pill-sun" class="planet-pill p-2 rounded-xl flex items-center gap-2 hover:bg-amber-500/20 group relative transition-all">
+                    <span class="w-3.5 h-3.5 rounded-full bg-amber-400 shadow-md shadow-amber-400/80"></span>
+                    <span id="i18n-sun-pill" class="hidden md:inline text-xs font-bold text-slate-200 group-hover:text-amber-300">خورشید</span>
+                </button>
+                <div id="quick-planets-list" class="flex flex-col gap-1.5">
+                    <!-- Dynamic planet pills rendered here -->
+                </div>
+            </div>
+
+            <!-- DETAILS & CUSTOMIZER SIDEBAR -->
+            <div id="info-panel" class="interactive glass-panel rounded-3xl w-80 md:w-96 p-5 flex flex-col gap-4 panel-hidden transition-all duration-300 ease-out z-20 max-h-[85vh] overflow-y-auto border border-slate-700/60">
+                
+                <!-- Panel Header -->
+                <div class="flex justify-between items-start border-b border-slate-800 pb-3">
+                    <div>
+                        <div class="flex items-center gap-2.5">
+                            <span id="panel-color-indicator" class="w-4 h-4 rounded-full bg-sky-400 shadow-lg shadow-sky-400/50"></span>
+                            <h2 id="panel-title" class="text-2xl font-black text-slate-100 glow-text-cyan">زمین</h2>
+                        </div>
+                        <p id="panel-subtitle" class="text-xs text-sky-400/80 font-medium mt-0.5">سیاره خاکی / زیست‌کره</p>
+                    </div>
+                    <button id="btn-close-panel" title="Close / بستن (ESC)" class="p-2 rounded-xl bg-slate-800/90 hover:bg-rose-600/80 text-slate-300 hover:text-white transition-all border border-slate-700 shadow-md">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <!-- Custom Note / Memory Input -->
+                <div class="bg-indigo-950/40 p-3 rounded-2xl border border-indigo-500/20 space-y-1.5">
+                    <label id="i18n-note-label" class="text-[11px] font-bold text-indigo-300 flex items-center gap-1.5">
+                        <i data-lucide="bookmark" class="w-3.5 h-3.5"></i>
+                        <span>یادداشت / خاطره شخصی شما درباره این سیاره:</span>
+                    </label>
+                    <textarea id="input-planet-note" rows="2" class="w-full bg-slate-950/80 border border-slate-700/80 rounded-xl p-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-400 resize-none transition-colors"></textarea>
+                </div>
+
+                <!-- Realtime Customization Inputs -->
+                <div class="space-y-2.5 bg-slate-900/50 p-3 rounded-2xl border border-slate-800">
+                    <div class="flex justify-between items-center text-xs text-slate-400 font-bold">
+                        <span id="i18n-custom-heading">سفارشی‌سازی ویژگی‌ها</span>
+                        <i data-lucide="sliders" class="w-3.5 h-3.5 text-sky-400"></i>
+                    </div>
+                    <div class="space-y-2">
+                        <div>
+                            <label id="i18n-label-name" class="text-[11px] text-slate-400 block mb-1">نام سیاره:</label>
+                            <input type="text" id="input-planet-name" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-sky-400">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label id="i18n-label-color" class="text-[11px] text-slate-400 block mb-1">رنگ ظاهری:</label>
+                                <input type="color" id="input-planet-color" class="w-full h-8 bg-slate-950 border border-slate-700 rounded-xl p-1 cursor-pointer">
+                            </div>
+                            <div>
+                                <label id="i18n-label-speed" class="text-[11px] text-slate-400 block mb-1">سرعت چرخش:</label>
+                                <input type="range" id="input-planet-speed" min="0.002" max="0.1" step="0.002" class="w-full accent-sky-400 cursor-pointer mt-1.5">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Metrics Grid -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="glass-card p-2.5 rounded-2xl">
+                        <span id="i18n-m-size-label" class="text-[10px] text-slate-400 block">قطر تخمینی</span>
+                        <span id="metric-size" class="text-xs font-bold text-slate-200 mt-0.5 block">12,742 کیلومتر</span>
+                    </div>
+                    <div class="glass-card p-2.5 rounded-2xl">
+                        <span id="i18n-m-dist-label" class="text-[10px] text-slate-400 block">فاصله از خورشید</span>
+                        <span id="metric-distance" class="text-xs font-bold text-slate-200 mt-0.5 block">149.6 میلیون ک.م</span>
+                    </div>
+                    <div class="glass-card p-2.5 rounded-2xl">
+                        <span id="i18n-m-period-label" class="text-[10px] text-slate-400 block">دوره چرخش مداری</span>
+                        <span id="metric-period" class="text-xs font-bold text-slate-200 mt-0.5 block">365 روز</span>
+                    </div>
+                    <div class="glass-card p-2.5 rounded-2xl">
+                        <span id="i18n-m-moons-label" class="text-[10px] text-slate-400 block">تعداد قمرها</span>
+                        <span id="metric-moons" class="text-xs font-bold text-slate-200 mt-0.5 block">1</span>
+                    </div>
+                </div>
+
+                <!-- Planet Description -->
+                <div>
+                    <h4 id="i18n-desc-heading" class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">توضیحات علمی</h4>
+                    <p id="panel-description" class="text-xs text-slate-300 leading-relaxed bg-slate-900/40 p-3 rounded-2xl border border-slate-800/80">
+                        سومین سیاره منظومه شمسی و تنها جرم شناخته شده دارای حیات.
+                    </p>
+                </div>
+
+                <!-- Focus & Delete Controls -->
+                <div class="flex gap-2">
+                    <button id="btn-focus-planet" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="maximize-2" class="w-4 h-4"></i>
+                        <span id="i18n-focus-btn">قفل روی جرم</span>
+                    </button>
+                    <button id="btn-delete-planet" title="Delete Custom Planet" class="hidden p-2.5 rounded-xl bg-rose-500/20 border border-rose-500/40 hover:bg-rose-500/30 text-rose-300 transition-all">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- FOOTER CONTROL BAR -->
+        <footer class="interactive glass-panel rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 border border-slate-800">
+            
+            <!-- Playback Controls -->
+            <div class="flex items-center gap-3">
+                <button id="btn-play-pause" class="w-10 h-10 rounded-xl bg-sky-400 hover:bg-sky-300 text-slate-950 flex items-center justify-center transition-all shadow-lg shadow-sky-400/30">
+                    <i data-lucide="pause" id="icon-play-pause" class="w-5 h-5 fill-current"></i>
+                </button>
+                <div class="flex flex-col">
+                    <span id="i18n-timewarp-label" class="text-[10px] text-slate-400 font-bold">زمان‌بندی گذر زمان (Time Warp)</span>
+                    <div class="flex items-center gap-2">
+                        <input type="range" id="global-speed-slider" min="0" max="10" step="0.1" value="1" class="w-24 sm:w-36 accent-sky-400 cursor-pointer">
+                        <span id="global-speed-val" class="text-xs font-mono font-bold text-sky-400">1.0x</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats & Status -->
+            <div class="hidden sm:flex items-center gap-6 text-xs text-slate-400">
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="i18n-engine-label">موتور شبیه‌سازی: <strong class="text-slate-200">Three.js 3D WebGL</strong></span>
+                </div>
+                <div>
+                    <span id="i18n-count-label">تعداد اجرام: <strong id="total-planets-count" class="text-sky-400 font-bold">8</strong></span>
+                </div>
+            </div>
+
+            <!-- Reset All Data Button -->
+            <button id="btn-reset-storage" class="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-rose-950/50 hover:text-rose-300 text-[11px] text-slate-400 transition-all border border-slate-700/60 flex items-center gap-1.5">
+                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                <span id="i18n-reset-btn">بازنشانی پیش‌فرض</span>
+            </button>
+        </footer>
+    </div>
+
+    <!-- MODAL: ADD CUSTOM PLANET -->
+    <div id="modal-add-planet" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="glass-panel w-full max-w-md rounded-3xl p-6 border border-slate-700/80 space-y-4 relative interactive">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 id="i18n-modal-title" class="text-lg font-bold text-slate-100 flex items-center gap-2">
+                    <i data-lucide="sparkles" class="w-5 h-5 text-indigo-400"></i>
+                    <span>ایجاد سیاره سفارشی جدید</span>
+                </h3>
+                <button id="btn-close-modal" class="p-1 rounded-xl text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="space-y-3">
+                <div>
+                    <label id="i18n-modal-name-label" class="text-xs text-slate-300 block mb-1">نام سیاره</label>
+                    <input type="text" id="new-planet-name" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label id="i18n-modal-size-label" class="text-xs text-slate-300 block mb-1">اندازه (شعاع)</label>
+                        <input type="number" id="new-planet-size" min="0.5" max="6" step="0.2" value="1.5" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100">
+                    </div>
+                    <div>
+                        <label id="i18n-modal-dist-label" class="text-xs text-slate-300 block mb-1">فاصله مداری از خورشید</label>
+                        <input type="number" id="new-planet-dist" min="30" max="220" step="5" value="75" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label id="i18n-modal-color-label" class="text-xs text-slate-300 block mb-1">رنگ ظاهری</label>
+                        <input type="color" id="new-planet-color" value="#a855f7" class="w-full h-9 bg-slate-900 border border-slate-700 rounded-xl p-1 cursor-pointer">
+                    </div>
+                    <div>
+                        <label id="i18n-modal-ring-label" class="text-xs text-slate-300 block mb-1">حلقه مداری درخشان؟</label>
+                        <select id="new-planet-ring" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100">
+                            <option value="false" id="i18n-opt-no">خیر</option>
+                            <option value="true" id="i18n-opt-yes">بله</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label id="i18n-modal-note-label" class="text-xs text-slate-300 block mb-1">یادداشت شخصی</label>
+                    <input type="text" id="new-planet-note" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100">
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button id="btn-cancel-modal" class="px-4 py-2 rounded-xl text-xs text-slate-400 hover:bg-slate-800">انصراف</button>
+                <button id="btn-save-planet" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30">ایجاد سیاره در منظومه</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN JAVASCRIPT APPLICATION -->
+    <script>
+        // --- TRANSLATION DICTIONARIES ---
+        const I18N = {
+            fa: {
+                title: "منظومه شمسی شخصی ۳ بعدی",
+                subtitle: "Visualizer & Customizable Cosmic Sandbox",
+                tourBtn: "تور سینمایی",
+                addPlanetBtn: "سیاره جدید",
+                bodiesLabel: "اجرام",
+                sunPill: "خورشید",
+                noteLabel: "یادداشت / خاطره شخصی شما درباره این سیاره:",
+                customHeading: "سفارشی‌سازی ویژگی‌ها",
+                labelName: "نام سیاره:",
+                labelColor: "رنگ ظاهری:",
+                labelSpeed: "سرعت چرخش:",
+                mSize: "قطر تخمینی",
+                mDist: "فاصله از خورشید",
+                mPeriod: "دوره چرخش مداری",
+                mMoons: "تعداد قمرها",
+                descHeading: "توضیحات علمی",
+                focusBtn: "قفل روی جرم",
+                timeWarp: "زمان‌بندی گذر زمان (Time Warp)",
+                engine: "موتور شبیه‌سازی: <strong class='text-slate-200'>Three.js 3D WebGL</strong>",
+                countLabel: "تعداد اجرام: ",
+                resetBtn: "بازنشانی پیش‌فرض",
+                modalTitle: "ایجاد سیاره سفارشی جدید",
+                modalName: "نام سیاره",
+                modalSize: "اندازه (شعاع)",
+                modalDist: "فاصله مداری از خورشید",
+                modalColor: "رنگ ظاهری",
+                modalRing: "حلقه مداری درخشان؟",
+                modalNote: "یادداشت شخصی",
+                optNo: "خیر",
+                optYes: "بله",
+                btnCancel: "انصراف",
+                btnSave: "ایجاد سیاره در منظومه",
+                placeholderNote: "یک یادداشت شخصی بنویسید...",
+                placeholderName: "نام سیاره را وارد کنید",
+                sunName: "خورشید (Sun)",
+                sunSub: "مرکز گرانشی منظومه شمسی",
+                sunDesc: "ستاره‌ای از نوع رشته اصلی G2V که بیش از ۹۹.۸٪ جرم کل منظومه شمسی را تشکیل می‌دهد.",
+                sunNoteDefault: "خورشید، سرچشمه نور و گرما.",
+                unitKm: "کیلومتر",
+                unitMkm: "میلیون ک.م",
+                unitDays: "روز",
+                unitYears: "سال",
+                unitBillionKm: "میلیارد ک.م",
+                orbitSub: "مدار شماره "
+            },
+            en: {
+                title: "Personal 3D Solar System",
+                subtitle: "Visualizer & Customizable Cosmic Sandbox",
+                tourBtn: "Cinematic Tour",
+                addPlanetBtn: "New Planet",
+                bodiesLabel: "BODIES",
+                sunPill: "Sun",
+                noteLabel: "Your personal memory / note about this planet:",
+                customHeading: "Customization & Properties",
+                labelName: "Planet Name:",
+                labelColor: "Visual Color:",
+                labelSpeed: "Orbit Speed:",
+                mSize: "Est. Diameter",
+                mDist: "Distance from Sun",
+                mPeriod: "Orbital Period",
+                mMoons: "Moons Count",
+                descHeading: "Scientific Information",
+                focusBtn: "Focus / Lock Object",
+                timeWarp: "Simulation Time Warp Rate",
+                engine: "Engine: <strong class='text-slate-200'>Three.js 3D WebGL</strong>",
+                countLabel: "Total Bodies: ",
+                resetBtn: "Reset Defaults",
+                modalTitle: "Create New Custom Planet",
+                modalName: "Planet Name",
+                modalSize: "Size (Radius)",
+                modalDist: "Orbital Distance from Sun",
+                modalColor: "Visual Color",
+                modalRing: "Has Glowing Ring System?",
+                modalNote: "Personal Note",
+                optNo: "No",
+                optYes: "Yes",
+                btnCancel: "Cancel",
+                btnSave: "Create Planet in System",
+                placeholderNote: "Write a personal note...",
+                placeholderName: "Enter planet name",
+                sunName: "The Sun",
+                sunSub: "Gravitational Center of the Solar System",
+                sunDesc: "G2V main-sequence star containing over 99.8% of the total mass of the entire Solar System.",
+                sunNoteDefault: "The Sun, source of light and life.",
+                unitKm: "km",
+                unitMkm: "million km",
+                unitDays: "days",
+                unitYears: "years",
+                unitBillionKm: "billion km",
+                orbitSub: "Orbit #"
+            }
+        };
+
+        // --- DEFAULT PLANETS DATASET ---
+        const DEFAULT_PLANETS_DATA = [
+            { id: 'mercury', nameFA: 'تیر (عطارد)', nameEN: 'Mercury', size: 0.8, distance: 22, speed: 0.035, color: '#a1a1aa', descFA: 'کوچک‌ترین و نزدیک‌ترین سیاره به خورشید با سطحی پر از گودال.', descEN: 'The smallest planet in the Solar System and closest to the Sun, heavily cratered.', moons: 0, periodFA: '88 روز', periodEN: '88 days', distFA: '57.9 میلیون ک.م', distEN: '57.9 million km', note: '' },
+            { id: 'venus', nameFA: 'ناهید (زهره)', nameEN: 'Venus', size: 1.2, distance: 32, speed: 0.022, color: '#fde047', descFA: 'سیاره‌ای بسیار داغ با جوی آکنده از دی‌اکسید کربن و ابرهای اسیدی.', descEN: 'A scorching planet with a dense carbon dioxide atmosphere and corrosive cloud layers.', moons: 0, periodFA: '225 روز', periodEN: '225 days', distFA: '108.2 میلیون ک.م', distEN: '108.2 million km', note: '' },
+            { id: 'earth', nameFA: 'زمین', nameEN: 'Earth', size: 1.4, distance: 46, speed: 0.016, color: '#38bdf8', descFA: 'خانه ما؛ تنها سیاره شناخته شده دارای حیات، آب مایع و جوی غنی.', descEN: 'Our home planet; the only astronomical object known to harbor liquid oceans and life.', moons: 1, periodFA: '365 روز', periodEN: '365 days', distFA: '149.6 میلیون ک.م', distEN: '149.6 million km', hasMoon: true, noteFA: 'زمین، زیباترین خانه ما در پهنه کیهان.', noteEN: 'Earth, our beautiful blue marble in space.' },
+            { id: 'mars', nameFA: 'بهرام (مریخ)', nameEN: 'Mars', size: 1.0, distance: 62, speed: 0.012, color: '#f87171', descFA: 'سیاره سرخ رنگ به دلیل وجود اکسید آهن در سطح آن با آتشفشان‌های عظیم.', descEN: 'The Red Planet, known for its iron-oxide surface and massive extinct volcanoes.', moons: 2, periodFA: '687 روز', periodEN: '687 days', distFA: '227.9 میلیون ک.م', distEN: '227.9 million km', note: '' },
+            { id: 'jupiter', nameFA: 'برجیس (مشتری)', nameEN: 'Jupiter', size: 3.2, distance: 88, speed: 0.007, color: '#fb923c', descFA: 'بزرگ‌ترین غول گازی منظومه شمسی همراه با لکه سرخ بزرگ طوفانی.', descEN: 'The largest gas giant in our Solar System, famous for its Great Red Spot storm.', moons: 79, periodFA: '12 سال', periodEN: '12 years', distFA: '778.5 میلیون ک.م', distEN: '778.5 million km', note: '' },
+            { id: 'saturn', nameFA: 'کیوان (زحل)', nameEN: 'Saturn', size: 2.6, distance: 118, speed: 0.005, color: '#fef08a', ring: true, descFA: 'سیاره شگفت‌انگیز دارای سیستم حلقه‌های بسیار گسترده و درخشان.', descEN: 'Gas giant celebrated for its prominent, wide, luminous ring system.', moons: 82, periodFA: '29 سال', periodEN: '29 years', distFA: '1.4 میلیارد ک.م', distEN: '1.4 billion km', note: '' },
+            { id: 'uranus', nameFA: 'اورانوس', nameEN: 'Uranus', size: 1.8, distance: 148, speed: 0.003, color: '#22d3ee', ring: true, descFA: 'غول یخی آبی‌رنگ با محوری چرخشی کاملاً کج نسبت به صفحه مداری.', descEN: 'An ice giant with a unique tilt, orbiting almost sideways relative to its plane.', moons: 27, periodFA: '84 سال', periodEN: '84 years', distFA: '2.8 میلیارد ک.م', distEN: '2.8 billion km', note: '' },
+            { id: 'neptune', nameFA: 'نپتون', nameEN: 'Neptune', size: 1.7, distance: 178, speed: 0.002, color: '#6366f1', descFA: 'دورترین سیاره اصلی؛ غول یخی با بادهای فوق‌العاده سریع و طوفانی.', descEN: 'The outermost major planet, an ice giant with supersonic global winds.', moons: 14, periodFA: '165 سال', periodEN: '165 years', distFA: '4.5 میلیارد ک.م', distEN: '4.5 billion km', note: '' }
+        ];
+
+        // --- GLOBAL APP STATE ---
+        let currentLang = 'fa'; // 'fa' or 'en'
+        let scene, camera, renderer, controls;
+        let sunMesh, sunGlowLayers = [];
+        let earthMoonMesh = null;
+        let planets = [];
+        let isPaused = false;
+        let globalSpeedMultiplier = 1.0;
+        let showOrbits = true;
+        let selectedPlanet = null;
+        let isTourActive = false;
+        let tourIndex = 0;
+        let tourTimer = null;
+        let audioCtx = null, synthOsc = null, synthGain = null;
+
+        // --- LOCAL STORAGE DATA MANAGEMENT ---
+        function loadPlanetsFromStorage() {
+            const saved = localStorage.getItem('personal_solar_system_v2_data');
+            if (saved) {
+                try {
+                    return JSON.parse(saved);
+                } catch(e) {
+                    console.error('Failed to load stored planets', e);
+                }
+            }
+            return JSON.parse(JSON.stringify(DEFAULT_PLANETS_DATA));
+        }
+
+        function savePlanetsToStorage() {
+            const dataToSave = planets.map(p => ({
+                ...p.data,
+                speed: p.currentSpeed
+            }));
+            localStorage.setItem('personal_solar_system_v2_data', JSON.stringify(dataToSave));
+        }
+
+        // --- PROCEDURAL TEXTURE GENERATORS ---
+        function createSunTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024; canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, '#fef08a');
+            grad.addColorStop(0.3, '#f59e0b');
+            grad.addColorStop(0.7, '#d97706');
+            grad.addColorStop(1, '#7c2d12');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (let i = 0; i < 300; i++) {
+                ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255, 255, 255, 0.25)' : 'rgba(120, 20, 0, 0.3)';
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height;
+                const r = Math.random() * 25 + 5;
+                ctx.beginPath();
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function createPlanetProceduralTexture(colorHex) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = colorHex;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Cloud/Atmospheric Bands
+            for (let i = 0; i < 50; i++) {
+                ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.18)';
+                const y = Math.random() * canvas.height;
+                const h = Math.random() * 18 + 4;
+                ctx.fillRect(0, y, canvas.width, h);
+            }
+
+            // Surface craters
+            for (let i = 0; i < 120; i++) {
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height;
+                const r = Math.random() * 8 + 2;
+                ctx.beginPath();
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(0,0,0,0.12)';
+                ctx.fill();
+            }
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // --- THREE.JS SCENE INITIALIZATION ---
+        function initThreeScene() {
+            const container = document.getElementById('webgl-container');
+
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x02040a, 0.001);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 2000);
+            camera.position.set(0, 110, 240);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.2;
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxDistance = 700;
+            controls.minDistance = 8;
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.22);
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.PointLight(0xfff7ed, 3.2, 800, 0.5);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            scene.add(sunLight);
+
+            createStarfield();
+            createSunMesh();
+
+            const storedPlanets = loadPlanetsFromStorage();
+            storedPlanets.forEach(data => addPlanetToScene(data));
+
+            setupRaycaster();
+            window.addEventListener('resize', onWindowResize);
+
+            animate();
+        }
+
+        function createStarfield() {
+            const count = 6000;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+            const colors = new Float32Array(count * 3);
+
+            for (let i = 0; i < count * 3; i += 3) {
+                positions[i] = (Math.random() - 0.5) * 1400;
+                positions[i + 1] = (Math.random() - 0.5) * 1400;
+                positions[i + 2] = (Math.random() - 0.5) * 1400;
+
+                const col = new THREE.Color();
+                col.setHSL(Math.random() * 0.2 + 0.55, 0.7, Math.random() * 0.5 + 0.5);
+                colors[i] = col.r;
+                colors[i + 1] = col.g;
+                colors[i + 2] = col.b;
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const material = new THREE.PointsMaterial({
+                size: 1.4,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.85
+            });
+
+            const starfield = new THREE.Points(geometry, material);
+            scene.add(starfield);
+        }
+
+        function createSunMesh() {
+            const sunGeo = new THREE.SphereGeometry(10, 64, 64);
+            const sunMat = new THREE.MeshBasicMaterial({ map: createSunTexture() });
+            sunMesh = new THREE.Mesh(sunGeo, sunMat);
+            scene.add(sunMesh);
+
+            const glowColors = [0xfbbf24, 0xf59e0b, 0xef4444];
+            const glowScales = [1.18, 1.35, 1.6];
+
+            glowScales.forEach((scale, idx) => {
+                const glowGeo = new THREE.SphereGeometry(10 * scale, 32, 32);
+                const glowMat = new THREE.MeshBasicMaterial({
+                    color: glowColors[idx],
+                    transparent: true,
+                    opacity: 0.25 / (idx + 1),
+                    side: THREE.BackSide
+                });
+                const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+                sunMesh.add(glowMesh);
+                sunGlowLayers.push(glowMesh);
+            });
+        }
+
+        function addPlanetToScene(data) {
+            const angle = Math.random() * Math.PI * 2;
+            const planetGeo = new THREE.SphereGeometry(data.size, 32, 32);
+            const texture = createPlanetProceduralTexture(data.color);
+
+            const planetMat = new THREE.MeshStandardMaterial({
+                map: texture,
+                roughness: 0.65,
+                metalness: 0.1
+            });
+
+            const planetMesh = new THREE.Mesh(planetGeo, planetMat);
+            planetMesh.castShadow = true;
+            planetMesh.receiveShadow = true;
+            planetMesh.userData = { id: data.id };
+
+            planetMesh.position.x = Math.cos(angle) * data.distance;
+            planetMesh.position.z = Math.sin(angle) * data.distance;
+
+            if (data.ring) {
+                const ringGeo = new THREE.RingGeometry(data.size * 1.5, data.size * 2.5, 64);
+                const rCanvas = document.createElement('canvas');
+                rCanvas.width = 256; rCanvas.height = 1;
+                const rCtx = rCanvas.getContext('2d');
+                const rGrad = rCtx.createLinearGradient(0, 0, 256, 0);
+                rGrad.addColorStop(0, 'rgba(255,255,255,0)');
+                rGrad.addColorStop(0.3, data.color);
+                rGrad.addColorStop(0.7, 'rgba(255,255,255,0.8)');
+                rGrad.addColorStop(1, 'rgba(0,0,0,0)');
+                rCtx.fillStyle = rGrad;
+                rCtx.fillRect(0, 0, 256, 1);
+
+                const ringMat = new THREE.MeshStandardMaterial({
+                    map: new THREE.CanvasTexture(rCanvas),
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.75,
+                    roughness: 0.4
+                });
+
+                const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+                ringMesh.rotation.x = Math.PI / 2.3;
+                planetMesh.add(ringMesh);
+            }
+
+            if (data.hasMoon || data.id === 'earth') {
+                const moonGeo = new THREE.SphereGeometry(data.size * 0.28, 16, 16);
+                const moonMat = new THREE.MeshStandardMaterial({ color: 0xd4d4d8, roughness: 0.9 });
+                earthMoonMesh = new THREE.Mesh(moonGeo, moonMat);
+                earthMoonMesh.position.set(data.size * 2.8, 0, 0);
+                planetMesh.add(earthMoonMesh);
+            }
+
+            const orbitLine = createOrbitRingMesh(data.distance);
+            scene.add(orbitLine);
+            scene.add(planetMesh);
+
+            const planetObj = {
+                data: { ...data },
+                mesh: planetMesh,
+                orbitLine: orbitLine,
+                angle: angle,
+                currentSpeed: data.speed
+            };
+
+            planets.push(planetObj);
+            renderQuickPlanetButtons();
+            updateTotalPlanetsCount();
+            return planetObj;
+        }
+
+        function createOrbitRingMesh(distance) {
+            const segments = 128;
+            const points = [];
+            for (let i = 0; i <= segments; i++) {
+                const theta = (i / segments) * Math.PI * 2;
+                points.push(new THREE.Vector3(Math.cos(theta) * distance, 0, Math.sin(theta) * distance));
+            }
+
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineBasicMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.22
+            });
+
+            return new THREE.LineLoop(geometry, material);
+        }
+
+        // --- DISMISS UI / DESELECT PLANET ---
+        function dismissInfoPanel(resetCamera = true) {
+            selectedPlanet = null;
+            const panel = document.getElementById('info-panel');
+            panel.classList.remove('panel-visible');
+            panel.classList.add('panel-hidden');
+
+            if (resetCamera) {
+                smoothCameraMove(new THREE.Vector3(0, 0, 0), 160);
+            }
+        }
+
+        function showInfoPanel() {
+            const panel = document.getElementById('info-panel');
+            panel.classList.remove('panel-hidden');
+            panel.classList.add('panel-visible');
+        }
+
+        // --- RAYCASTER FOR INTERACTION ---
+        function setupRaycaster() {
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+
+            window.addEventListener('click', (e) => {
+                if (e.target.closest('.interactive')) return;
+
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+                const targets = planets.map(p => p.mesh).concat([sunMesh]);
+                const intersects = raycaster.intersectObjects(targets);
+
+                if (intersects.length > 0) {
+                    const hit = intersects[0].object;
+                    if (hit === sunMesh) {
+                        selectSun();
+                    } else {
+                        const found = planets.find(p => p.mesh === hit);
+                        if (found) selectPlanet(found);
+                    }
+                } else {
+                    dismissInfoPanel(true);
+                }
+            });
+        }
+
+        function smoothCameraMove(targetPos, distanceOffset = 25) {
+            const endCamPos = new THREE.Vector3(
+                targetPos.x + distanceOffset * 0.7,
+                targetPos.y + distanceOffset * 0.5,
+                targetPos.z + distanceOffset * 0.7
+            );
+
+            new TWEEN.Tween(camera.position)
+                .to(endCamPos, 1200)
+                .easing(TWEEN.Easing.Cubic.Out)
+                .start();
+
+            new TWEEN.Tween(controls.target)
+                .to(targetPos, 1200)
+                .easing(TWEEN.Easing.Cubic.Out)
+                .start();
+        }
+
+        // --- SELECT PLANET OR SUN ---
+        function getPlanetName(data) {
+            if (data.name) return data.name; // user custom overridden name
+            return currentLang === 'fa' ? data.nameFA : data.nameEN;
+        }
+
+        function getPlanetDesc(data) {
+            if (currentLang === 'fa') return data.descFA || data.description || '';
+            return data.descEN || data.description || '';
+        }
+
+        function selectPlanet(planetObj) {
+            selectedPlanet = planetObj;
+            const data = planetObj.data;
+            const t = I18N[currentLang];
+
+            const displayName = getPlanetName(data);
+            document.getElementById('panel-title').innerText = displayName;
+            document.getElementById('panel-subtitle').innerText = `${t.orbitSub} ${planets.indexOf(planetObj) + 1}`;
+            document.getElementById('panel-color-indicator').style.backgroundColor = data.color;
+            document.getElementById('panel-description').innerText = getPlanetDesc(data);
+            
+            const noteVal = data.note !== undefined && data.note !== '' ? data.note : (currentLang === 'fa' ? (data.noteFA || '') : (data.noteEN || ''));
+            document.getElementById('input-planet-note').value = noteVal;
+
+            document.getElementById('metric-size').innerText = `${Math.round(data.size * 6000)} ${t.unitKm}`;
+            document.getElementById('metric-distance').innerText = (currentLang === 'fa' ? data.distFA : data.distEN) || `${data.distance * 4} ${t.unitMkm}`;
+            document.getElementById('metric-period').innerText = (currentLang === 'fa' ? data.periodFA : data.periodEN) || `${Math.round(data.distance * 2.5)} ${t.unitDays}`;
+            document.getElementById('metric-moons').innerText = data.moons !== undefined ? data.moons : '0';
+
+            document.getElementById('input-planet-name').value = displayName;
+            document.getElementById('input-planet-color').value = data.color;
+            document.getElementById('input-planet-speed').value = planetObj.currentSpeed;
+
+            const btnDelete = document.getElementById('btn-delete-planet');
+            if (data.id.startsWith('custom-')) {
+                btnDelete.classList.remove('hidden');
+            } else {
+                btnDelete.classList.add('hidden');
+            }
+
+            showInfoPanel();
+            smoothCameraMove(planetObj.mesh.position, planetObj.data.size * 6 + 12);
+        }
+
+        function selectSun() {
+            selectedPlanet = null;
+            const t = I18N[currentLang];
+
+            document.getElementById('panel-title').innerText = t.sunName;
+            document.getElementById('panel-subtitle').innerText = t.sunSub;
+            document.getElementById('panel-color-indicator').style.backgroundColor = '#fbbf24';
+            document.getElementById('panel-description').innerText = t.sunDesc;
+            document.getElementById('input-planet-note').value = t.sunNoteDefault;
+
+            document.getElementById('metric-size').innerText = `1,392,700 ${t.unitKm}`;
+            document.getElementById('metric-distance').innerText = `0 ${t.unitKm}`;
+            document.getElementById('metric-period').innerText = '---';
+            document.getElementById('metric-moons').innerText = '0';
+
+            document.getElementById('input-planet-name').value = t.sunName;
+            document.getElementById('input-planet-color').value = '#fbbf24';
+            document.getElementById('input-planet-speed').value = 0;
+
+            document.getElementById('btn-delete-planet').classList.add('hidden');
+            showInfoPanel();
+            smoothCameraMove(sunMesh.position, 38);
+        }
+
+        function renderQuickPlanetButtons() {
+            const container = document.getElementById('quick-planets-list');
+            container.innerHTML = '';
+
+            planets.forEach(p => {
+                const displayName = getPlanetName(p.data);
+                const btn = document.createElement('button');
+                btn.className = 'planet-pill p-2 rounded-xl flex items-center gap-2 hover:bg-slate-800/80 group relative transition-all';
+                btn.innerHTML = `
+                    <span class="w-3.5 h-3.5 rounded-full" style="background-color: ${p.data.color}; box-shadow: 0 0 10px ${p.data.color}90"></span>
+                    <span class="hidden md:inline text-xs font-bold text-slate-300 group-hover:text-sky-300">${displayName}</span>
+                `;
+                btn.addEventListener('click', () => selectPlanet(p));
+                container.appendChild(btn);
+            });
+        }
+
+        function updateTotalPlanetsCount() {
+            document.getElementById('total-planets-count').innerText = planets.length;
+        }
+
+        // --- I18N / LANGUAGE SWITCHER ---
+        function setLanguage(lang) {
+            currentLang = lang;
+            const t = I18N[lang];
+            const htmlEl = document.documentElement;
+
+            if (lang === 'fa') {
+                htmlEl.setAttribute('dir', 'rtl');
+                htmlEl.setAttribute('lang', 'fa');
+                document.getElementById('lang-indicator').innerText = 'English (EN)';
+            } else {
+                htmlEl.setAttribute('dir', 'ltr');
+                htmlEl.setAttribute('lang', 'en');
+                document.getElementById('lang-indicator').innerText = 'فارسی (FA)';
+            }
+
+            // Update UI static elements
+            document.getElementById('i18n-app-title').innerText = t.title;
+            document.getElementById('i18n-app-subtitle').innerText = t.subtitle;
+            document.getElementById('i18n-tour-btn').innerText = t.tourBtn;
+            document.getElementById('i18n-add-planet-btn').innerText = t.addPlanetBtn;
+            document.getElementById('i18n-bodies-label').innerText = t.bodiesLabel;
+            document.getElementById('i18n-sun-pill').innerText = t.sunPill;
+            
+            const noteSpan = document.querySelector('#i18n-note-label span');
+            if (noteSpan) noteSpan.innerText = t.noteLabel;
+            
+            document.getElementById('input-planet-note').placeholder = t.placeholderNote;
+            document.getElementById('i18n-custom-heading').innerText = t.customHeading;
+            document.getElementById('i18n-label-name').innerText = t.labelName;
+            document.getElementById('i18n-label-color').innerText = t.labelColor;
+            document.getElementById('i18n-label-speed').innerText = t.labelSpeed;
+            document.getElementById('i18n-m-size-label').innerText = t.mSize;
+            document.getElementById('i18n-m-dist-label').innerText = t.mDist;
+            document.getElementById('i18n-m-period-label').innerText = t.mPeriod;
+            document.getElementById('i18n-m-moons-label').innerText = t.mMoons;
+            document.getElementById('i18n-desc-heading').innerText = t.descHeading;
+            
+            const focusSpan = document.querySelector('#btn-focus-planet span');
+            if (focusSpan) focusSpan.innerText = t.focusBtn;
+
+            document.getElementById('i18n-timewarp-label').innerText = t.timeWarp;
+            document.getElementById('i18n-engine-label').innerHTML = t.engine;
+            
+            const countLabelNode = document.getElementById('i18n-count-label');
+            const totalCountNode = document.getElementById('total-planets-count');
+            countLabelNode.childNodes[0].textContent = t.countLabel;
+
+            const resetSpan = document.querySelector('#btn-reset-storage span');
+            if (resetSpan) resetSpan.innerText = t.resetBtn;
+
+            // Modal elements
+            const modalTitleSpan = document.querySelector('#i18n-modal-title span');
+            if (modalTitleSpan) modalTitleSpan.innerText = t.modalTitle;
+            
+            document.getElementById('i18n-modal-name-label').innerText = t.modalName;
+            document.getElementById('i18n-modal-size-label').innerText = t.modalSize;
+            document.getElementById('i18n-modal-dist-label').innerText = t.modalDist;
+            document.getElementById('i18n-modal-color-label').innerText = t.modalColor;
+            document.getElementById('i18n-modal-ring-label').innerText = t.modalRing;
+            document.getElementById('i18n-modal-note-label').innerText = t.modalNote;
+            document.getElementById('i18n-opt-no').innerText = t.optNo;
+            document.getElementById('i18n-opt-yes').innerText = t.optYes;
+            document.getElementById('btn-cancel-modal').innerText = t.btnCancel;
+            document.getElementById('btn-save-planet').innerText = t.btnSave;
+            document.getElementById('new-planet-name').placeholder = t.placeholderName;
+
+            renderQuickPlanetButtons();
+
+            // Refresh selected panel if open
+            if (selectedPlanet) {
+                selectPlanet(selectedPlanet);
+            }
+        }
+
+        // --- CINEMATIC AUTO TOUR ---
+        function toggleCinematicTour() {
+            isTourActive = !isTourActive;
+            const btn = document.getElementById('btn-tour-mode');
+            btn.classList.toggle('bg-amber-500/20', isTourActive);
+            btn.classList.toggle('border-amber-500/50', isTourActive);
+
+            if (isTourActive) {
+                tourIndex = 0;
+                runTourStep();
+            } else {
+                if (tourTimer) clearTimeout(tourTimer);
+            }
+        }
+
+        function runTourStep() {
+            if (!isTourActive) return;
+            if (tourIndex >= planets.length) tourIndex = 0;
+
+            const targetPlanet = planets[tourIndex];
+            selectPlanet(targetPlanet);
+
+            tourIndex++;
+            tourTimer = setTimeout(runTourStep, 6000);
+        }
+
+        // --- ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            TWEEN.update();
+
+            if (sunMesh) sunMesh.rotation.y += 0.002;
+
+            if (!isPaused) {
+                planets.forEach(p => {
+                    p.angle += p.currentSpeed * 0.15 * globalSpeedMultiplier;
+
+                    p.mesh.position.x = Math.cos(p.angle) * p.data.distance;
+                    p.mesh.position.z = Math.sin(p.angle) * p.data.distance;
+
+                    p.mesh.rotation.y += 0.01;
+                });
+
+                if (earthMoonMesh) {
+                    earthMoonMesh.rotation.y += 0.02;
+                }
+            }
+
+            if (selectedPlanet && !isTourActive) {
+                controls.target.copy(selectedPlanet.mesh.position);
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- COSMIC AUDIO SYNTH ---
+        function toggleCosmicAudio() {
+            const btn = document.getElementById('btn-sound');
+            const icon = document.getElementById('icon-sound');
+
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                synthOsc = audioCtx.createOscillator();
+                synthGain = audioCtx.createGain();
+
+                synthOsc.type = 'sine';
+                synthOsc.frequency.setValueAtTime(90, audioCtx.currentTime);
+                synthGain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+
+                synthOsc.connect(synthGain);
+                synthGain.connect(audioCtx.destination);
+                synthOsc.start();
+
+                icon.setAttribute('data-lucide', 'volume-2');
+                btn.classList.add('text-sky-400');
+            } else {
+                if (audioCtx.state === 'running') {
+                    audioCtx.suspend();
+                    icon.setAttribute('data-lucide', 'volume-x');
+                    btn.classList.remove('text-sky-400');
+                } else {
+                    audioCtx.resume();
+                    icon.setAttribute('data-lucide', 'volume-2');
+                    btn.classList.add('text-sky-400');
+                }
+            }
+            lucide.createIcons();
+        }
+
+        // --- SETUP UI LISTENERS ---
+        function setupUIEvents() {
+            lucide.createIcons();
+
+            // Language Toggle
+            document.getElementById('btn-lang-toggle').addEventListener('click', () => {
+                setLanguage(currentLang === 'fa' ? 'en' : 'fa');
+            });
+
+            // Pill Sun click
+            document.getElementById('pill-sun').addEventListener('click', selectSun);
+
+            // Audio
+            document.getElementById('btn-sound').addEventListener('click', toggleCosmicAudio);
+
+            // Reset Camera
+            document.getElementById('btn-reset-cam').addEventListener('click', () => {
+                isTourActive = false;
+                dismissInfoPanel(true);
+            });
+
+            // Play / Pause
+            const playBtn = document.getElementById('btn-play-pause');
+            playBtn.addEventListener('click', () => {
+                isPaused = !isPaused;
+                const icon = document.getElementById('icon-play-pause');
+                icon.setAttribute('data-lucide', isPaused ? 'play' : 'pause');
+                playBtn.classList.toggle('bg-amber-400', isPaused);
+                playBtn.classList.toggle('bg-sky-400', !isPaused);
+                lucide.createIcons();
+            });
+
+            // Global Speed Slider
+            document.getElementById('global-speed-slider').addEventListener('input', (e) => {
+                globalSpeedMultiplier = parseFloat(e.target.value);
+                document.getElementById('global-speed-val').innerText = `${globalSpeedMultiplier.toFixed(1)}x`;
+            });
+
+            // Toggle Orbits
+            document.getElementById('btn-toggle-orbits').addEventListener('click', () => {
+                showOrbits = !showOrbits;
+                planets.forEach(p => p.orbitLine.visible = showOrbits);
+            });
+
+            // Cinematic Tour
+            document.getElementById('btn-tour-mode').addEventListener('click', toggleCinematicTour);
+
+            // Close Info Panel Button
+            document.getElementById('btn-close-panel').addEventListener('click', () => {
+                dismissInfoPanel(true);
+            });
+
+            // ESC Key Shortcut
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    dismissInfoPanel(true);
+                    const modal = document.getElementById('modal-add-planet');
+                    modal.classList.add('opacity-0', 'pointer-events-none');
+                }
+            });
+
+            // Focus Lock Button
+            document.getElementById('btn-focus-planet').addEventListener('click', () => {
+                if (selectedPlanet) {
+                    smoothCameraMove(selectedPlanet.mesh.position, selectedPlanet.data.size * 6 + 10);
+                } else {
+                    smoothCameraMove(sunMesh.position, 35);
+                }
+            });
+
+            // Realtime Edit Planet Name
+            document.getElementById('input-planet-name').addEventListener('input', (e) => {
+                if (selectedPlanet) {
+                    selectedPlanet.data.name = e.target.value;
+                    document.getElementById('panel-title').innerText = e.target.value;
+                    renderQuickPlanetButtons();
+                    savePlanetsToStorage();
+                }
+            });
+
+            // Realtime Edit Planet Color
+            document.getElementById('input-planet-color').addEventListener('input', (e) => {
+                if (selectedPlanet) {
+                    const newColor = e.target.value;
+                    selectedPlanet.data.color = newColor;
+                    selectedPlanet.mesh.material.map = createPlanetProceduralTexture(newColor);
+                    document.getElementById('panel-color-indicator').style.backgroundColor = newColor;
+                    renderQuickPlanetButtons();
+                    savePlanetsToStorage();
+                }
+            });
+
+            // Realtime Edit Planet Speed
+            document.getElementById('input-planet-speed').addEventListener('input', (e) => {
+                if (selectedPlanet) {
+                    selectedPlanet.currentSpeed = parseFloat(e.target.value);
+                    savePlanetsToStorage();
+                }
+            });
+
+            // Save Note
+            document.getElementById('input-planet-note').addEventListener('input', (e) => {
+                if (selectedPlanet) {
+                    selectedPlanet.data.note = e.target.value;
+                    savePlanetsToStorage();
+                }
+            });
+
+            // Delete Custom Planet
+            document.getElementById('btn-delete-planet').addEventListener('click', () => {
+                if (selectedPlanet && selectedPlanet.data.id.startsWith('custom-')) {
+                    scene.remove(selectedPlanet.mesh);
+                    scene.remove(selectedPlanet.orbitLine);
+                    planets = planets.filter(p => p !== selectedPlanet);
+                    dismissInfoPanel(true);
+                    renderQuickPlanetButtons();
+                    updateTotalPlanetsCount();
+                    savePlanetsToStorage();
+                }
+            });
+
+            // Add Custom Planet Modal
+            const modal = document.getElementById('modal-add-planet');
+            document.getElementById('btn-add-planet').addEventListener('click', () => {
+                modal.classList.remove('opacity-0', 'pointer-events-none');
+            });
+
+            const closeModal = () => modal.classList.add('opacity-0', 'pointer-events-none');
+            document.getElementById('btn-close-modal').addEventListener('click', closeModal);
+            document.getElementById('btn-cancel-modal').addEventListener('click', closeModal);
+
+            // Save New Custom Planet
+            document.getElementById('btn-save-planet').addEventListener('click', () => {
+                const name = document.getElementById('new-planet-name').value || 'Custom Planet';
+                const size = parseFloat(document.getElementById('new-planet-size').value) || 1.5;
+                const dist = parseFloat(document.getElementById('new-planet-dist').value) || 75;
+                const color = document.getElementById('new-planet-color').value || '#a855f7';
+                const ring = document.getElementById('new-planet-ring').value === 'true';
+                const note = document.getElementById('new-planet-note').value || '';
+
+                const newPlanetData = {
+                    id: 'custom-' + Date.now(),
+                    name: name,
+                    size: size,
+                    distance: dist,
+                    speed: 0.01,
+                    color: color,
+                    ring: ring,
+                    descFA: 'سیاره شخصی خلق شده توسط کاربر در منظومه شمسی.',
+                    descEN: 'Custom user-created astronomical object in the solar system.',
+                    moons: 0,
+                    periodFA: `${Math.round(dist * 2.8)} روز`,
+                    periodEN: `${Math.round(dist * 2.8)} days`,
+                    note: note
+                };
+
+                const newObj = addPlanetToScene(newPlanetData);
+                closeModal();
+                selectPlanet(newObj);
+                savePlanetsToStorage();
+            });
+
+            // Reset Local Storage Data
+            document.getElementById('btn-reset-storage').addEventListener('click', () => {
+                const confirmMsg = currentLang === 'fa' 
+                    ? 'آیا مطمئن هستید که می‌خواهید تمامی تغییرات و سیاره‌های شخصی را بازنشانی کنید؟'
+                    : 'Are you sure you want to reset all customized settings and custom planets?';
+                if (confirm(confirmMsg)) {
+                    localStorage.removeItem('personal_solar_system_v2_data');
+                    location.reload();
+                }
+            });
+        }
+
+        // INITIALIZE APP ON LOAD
+        window.addEventListener('DOMContentLoaded', () => {
+            initThreeScene();
+            setupUIEvents();
+            setLanguage('fa');
+        });
+    </script>
+</body>
+</html>
